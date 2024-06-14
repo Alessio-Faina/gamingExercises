@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Data.Common;
 using System.Net.NetworkInformation;
+using System.Windows.Media.Media3D;
 
 
 namespace FallingSand
@@ -27,6 +28,7 @@ namespace FallingSand
 
     internal class SandGrain(int colour)
     {
+        const int maxFallingSpeed = 25;
         int g_colourData = colour;
         int g_fallingSpeed = 1;
 
@@ -38,6 +40,16 @@ namespace FallingSand
         public int Speed
         {
             get { return g_fallingSpeed; }
+        }
+        public void Accelerate()
+        {
+            g_fallingSpeed = Math.Min(g_fallingSpeed + 1, maxFallingSpeed);
+        }
+
+        public void Brake()
+        {
+            g_fallingSpeed = Math.Min(g_fallingSpeed / 2, 0);
+            if (g_fallingSpeed == 1) g_fallingSpeed = 0;
         }
     }
 
@@ -192,6 +204,19 @@ namespace FallingSand
             }
         }
 
+        static int FindNextAvailableSpot(ref SandWall wall, int x, int y, int speed)
+        {
+            int maxy = Math.Min(y + speed, GlobalConsts.HEIGHT - 1);
+            maxy = Math.Max(maxy, 0);
+            int result = y;
+            for (int i = y + 1; i <= maxy; i++)
+            {
+                if (wall[x, i] == null) result = i;
+                else break;
+            }
+            return result;
+        }
+
         static void PhysicsEngine(ref SandWall wall)
         {
             Random rnd = new Random();
@@ -199,9 +224,36 @@ namespace FallingSand
             {
                 for (int x = GlobalConsts.WIDTH - 1; x > 0; x--)
                 {
-                    int speed = wall[x, y].Speed;
                     if (wall[x,y] != null)
                     {
+                        int speed = wall[x, y].Speed;
+                        int nextVerticalSpot = FindNextAvailableSpot(ref wall, x, y, speed);
+                        if (nextVerticalSpot != y)
+                        {
+                            wall[x, y].Accelerate();
+                            wall[x, nextVerticalSpot] = wall[x, y];
+                            wall[x, y] = null;
+                        }
+                        else
+                        {
+                            //wall[x, y].Brake();
+                            var leftOrRight = rnd.Next(9);
+                            int left = FindNextAvailableSpot(ref wall, x - 1, y, speed);
+                            int right = FindNextAvailableSpot(ref wall, x + 1, y, speed);
+
+                            if (right > y && x < GlobalConsts.WIDTH - 1 && leftOrRight >= 5 && wall[x + 1, right] == null) // go right
+                            {
+                                wall[x + 1, right] = wall[x, y];
+                                wall[x, y] = null;
+                            }
+                            else if (left > y && x > 1 && leftOrRight < 5 && wall[x - 1, left] == null)
+                            {
+                                wall[x - 1, left] = wall[x, y];
+                                wall[x, y] = null;
+                            }
+                        }
+
+                        /*
                         if (wall[x, y+1] == null)
                         {
                             wall[x, y + 1] = wall[x, y];
@@ -221,6 +273,7 @@ namespace FallingSand
                             }
 
                         }
+                        */
                     }
                 }
             }
