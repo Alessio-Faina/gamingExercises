@@ -15,6 +15,9 @@ namespace FallingSand
     {
         public const int WIDTH = 640;
         public const int HEIGHT = 480;
+        public const int MAX_FALLING_SPEED = 64;
+        public const int ACCELERATION = 3;
+        public const int INITIAL_FALLING_SPEED = 3;
     }
 
     public static class Utilities
@@ -28,9 +31,9 @@ namespace FallingSand
 
     internal class SandGrain(int colour)
     {
-        const int maxFallingSpeed = 25;
+        const int maxFallingSpeed = GlobalConsts.MAX_FALLING_SPEED;
         int g_colourData = colour;
-        int g_fallingSpeed = 1;
+        int g_fallingSpeed = GlobalConsts.INITIAL_FALLING_SPEED;
 
         public int Colour
         {
@@ -43,7 +46,7 @@ namespace FallingSand
         }
         public void Accelerate()
         {
-            g_fallingSpeed = Math.Min(g_fallingSpeed + 1, maxFallingSpeed);
+            g_fallingSpeed = Math.Min(g_fallingSpeed + GlobalConsts.ACCELERATION, maxFallingSpeed);
         }
 
         public void Brake()
