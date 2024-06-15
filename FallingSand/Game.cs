@@ -68,6 +68,17 @@ namespace FallingSand
             }
         }
 
+        public void DeleteGrain(int posX, int posY)
+        {
+            if (posX > 0 && posY > 0 && posX <= GlobalConsts.WIDTH && posY <= GlobalConsts.HEIGHT)
+            {
+                if (array[posX, posY]  != null)
+                {
+                    array[posX, posY] = null;
+                }
+            }
+        }
+
         public SandGrain this[int x, int y]
         {
             get
@@ -89,6 +100,7 @@ namespace FallingSand
         static WriteableBitmap writeableBitmap;
         static bool Running = false;
         static bool isLeftMousePressed = false;
+        static bool isRightMousePressed = false;
         static TextBlock debugText;
 
         [STAThread]
@@ -136,6 +148,8 @@ namespace FallingSand
             gameCanvas.VerticalAlignment = VerticalAlignment.Top;
             gameCanvas.MouseLeftButtonDown += GameCanvas_MouseLeftButtonDown;
             gameCanvas.MouseLeftButtonUp += GameCanvas_MouseLeftButtonUp;
+            gameCanvas.MouseRightButtonDown += GameCanvas_MouseRightButtonDown;
+            gameCanvas.MouseRightButtonUp += GameCanvas_MouseRightButtonUp;
             mainWindow.Closing += 
                 (sender, args) => { 
                     Running = false;
@@ -160,6 +174,16 @@ namespace FallingSand
             isLeftMousePressed = false;
         }
 
+        static private void GameCanvas_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            isRightMousePressed = true;
+        }
+
+        static private void GameCanvas_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            isRightMousePressed = false;
+        }
+
         static void HandleEvents(ref SandWall wall, ref int colour)
         {
             if (isLeftMousePressed)
@@ -175,6 +199,21 @@ namespace FallingSand
                     for (int y = minY; y < maxY; y++)
                     {
                         wall.AddGrain(x, y, colour);
+                    }
+                }
+            }
+            else if (isRightMousePressed)
+            {
+                var pos = Mouse.GetPosition(gameCanvas);
+                int minX = Math.Max(0, (int)pos.X - 20);
+                int maxX = Math.Min(GlobalConsts.WIDTH, (int)pos.X + 20);
+                int minY = Math.Max(0, (int)pos.Y - 20);
+                int maxY = Math.Min(GlobalConsts.HEIGHT, (int)pos.Y + 20);
+                for (int x = minX; x < maxX; x++)
+                {
+                    for (int y = minY; y < maxY; y++)
+                    {
+                        wall.DeleteGrain(x, y);
                     }
                 }
             }
@@ -286,20 +325,39 @@ namespace FallingSand
                         else
                         {
                             //wall[x, y].Brake();
-                            if (rnd.Next(0, 2) == 0)
-                            {
-                                direction = 0;
-                                preL++;
-                            } else
-                            {
-                                preR++;
-                                direction = 1;
-                            }
 
                             int left = FindNextAvailableSpot(ref wall, x - 1, y, speed);
                             int right = FindNextAvailableSpot(ref wall, x + 1, y, speed);
-                            
 
+                            if (left != -1 && right != -1)
+                            {
+                                if (rnd.Next(0, 2) == 0)
+                                {
+                                    right = -1;
+                                }
+                                else
+                                {
+                                    left = -1;
+                                }
+                            }
+
+                            if ((left != -1) && (right == -1))
+                            {
+                                if (x < GlobalConsts.WIDTH - 1)
+                                {
+                                    wall[x - 1, left] = wall[x, y];
+                                    wall[x, y] = null;
+                                }
+                            } else if ((left == -1) && (right != -1))
+                            {
+                                if (x > 1)
+                                {
+                                    wall[x + 1, right] = wall[x, y];
+                                    wall[x, y] = null;
+                                }
+                            }
+
+                            /*
                             if (right != -1 && x < GlobalConsts.WIDTH - 1 && direction == 1 && wall[x + 1, right] == null) // go right
                             {
                                 wall[x + 1, right] = wall[x, y];
@@ -312,10 +370,12 @@ namespace FallingSand
                                 wall[x, y] = null;
                                 L++;
                             }
+                            */
                         }
                     }
                 }
             }
+            /*
             debugText.Dispatcher.Invoke(new Action(() =>
             {
                 debugText.Text = "preL: " + preL.ToString() + "\n";
@@ -323,12 +383,15 @@ namespace FallingSand
                 debugText.Text += "L: " + L.ToString() + "\n";
                 debugText.Text += "R: " + R.ToString() + "\n";
             }
-));
+            ));
+            */
         }
 
         [STAThread]
         static void GameLoop()
         {
+            double[] fps = new double[10];
+            int fpsIndex = 0;
             SandWall wall = new();
             float colourIndex = 0;
 
@@ -354,11 +417,20 @@ namespace FallingSand
                 {
                     System.Threading.Thread.Sleep(targetDelta);
                 }
-                //debugText.Dispatcher.Invoke(new Action(() =>
-                //{ debugText.Text += "Col " + colourNow.ToString("X") + "\n"; }
-                //));
+                
                 colourIndex += (float)0.01;
                 if (colourIndex >= 100) colourIndex = 0;
+
+                fps[fpsIndex++ % 10] = ((1 / frameDelta.TotalMilliseconds) * 1000);
+                double avg = 0;
+                for (int i = 0; i < 10; i++)
+                {
+                    avg += fps[i];
+                }
+                avg /= 10;
+                debugText.Dispatcher.Invoke(new Action(() =>
+                { debugText.Text = "FPS " + avg.ToString() + "\n"; }
+                ));
             }
         }
     }
