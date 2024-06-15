@@ -21,8 +21,8 @@ namespace FallingSand
     {
         public static int ConvertColorToInt(Color color)
         {
-            int value = (color.A << 24) | (color.B << 16) | (color.G << 8) | color.R;
-            return value;
+            uint value = (uint)((color.B << 16) | (color.G << 8) | color.R);
+            return (int)value;
         }
     }
 
@@ -84,10 +84,12 @@ namespace FallingSand
     internal class Game
     {
         static Window mainWindow;
+        static Window debugWindow;
         static Image? gameCanvas;
         static WriteableBitmap writeableBitmap;
         static bool Running = false;
         static bool isLeftMousePressed = false;
+        static TextBlock debugText;
 
         [STAThread]
         static void Main(string[] args)
@@ -95,16 +97,27 @@ namespace FallingSand
             mainWindow = new Window()
             {
                 Width = 700,
-                Height = 560
+                Height = 560,
+                Left = 300
             };
 
             gameCanvas = new Image()
             {
                 Width = GlobalConsts.WIDTH,
-                Height = GlobalConsts.HEIGHT
+                Height = GlobalConsts.HEIGHT,
             };
             mainWindow.Content = gameCanvas;
             mainWindow.Show();
+
+            debugWindow = new Window()
+            {
+                Width = 100,
+                Height = 160,
+                Left = mainWindow.Left - 100
+            };
+            debugText = new TextBlock();
+            debugWindow.Content = debugText;
+            debugWindow.Show();
 
             RenderOptions.SetBitmapScalingMode(gameCanvas, BitmapScalingMode.NearestNeighbor);
             RenderOptions.SetEdgeMode(gameCanvas, EdgeMode.Aliased);
@@ -124,7 +137,10 @@ namespace FallingSand
             gameCanvas.MouseLeftButtonDown += GameCanvas_MouseLeftButtonDown;
             gameCanvas.MouseLeftButtonUp += GameCanvas_MouseLeftButtonUp;
             mainWindow.Closing += 
-                (sender, args) => { Running = false; };
+                (sender, args) => { 
+                    Running = false;
+                    debugWindow.Close();
+                };
 
             var gameThread = new Thread(GameLoop);
             gameThread.SetApartmentState(ApartmentState.STA);
@@ -203,12 +219,38 @@ namespace FallingSand
                 writeableBitmap.Unlock();
             }
         }
+        public static Color Rainbow(float progress)
+        {
+            float div = (Math.Abs(progress % 1) * 6);
+            int ascending = (int)((div % 1) * 255);
+            int descending = 255 - ascending;
+
+            switch ((int)div)
+            {
+                case 0:
+                    return Color.FromArgb(255, 255, (byte)ascending, 0);
+                case 1:
+                    return Color.FromArgb(255, (byte)descending, 255, 0);
+                case 2:
+                    return Color.FromArgb(255, 0, 255, (byte)ascending);
+                case 3:
+                    return Color.FromArgb(255, 0, (byte)descending, 255);
+                case 4:
+                    return Color.FromArgb(255, (byte)ascending, 0, 255);
+                default: // case 5:
+                    return Color.FromArgb(255, 255, 0, (byte)descending);
+            }
+        }
 
         static int FindNextAvailableSpot(ref SandWall wall, int x, int y, int speed)
         {
+            if ((x < 0) || (x >= GlobalConsts.WIDTH))
+            {
+                return -1;
+            }
             int maxy = Math.Min(y + speed, GlobalConsts.HEIGHT - 1);
             maxy = Math.Max(maxy, 0);
-            int result = y;
+            int result = -1;
             for (int i = y + 1; i <= maxy; i++)
             {
                 if (wall[x, i] == null) result = i;
@@ -217,18 +259,25 @@ namespace FallingSand
             return result;
         }
 
+        static int preL = 0;
+        static int preR = 0;
+        static int L = 0;
+        static int R = 0;
+
         static void PhysicsEngine(ref SandWall wall)
         {
             Random rnd = new Random();
+            int direction = 0;
             for (int y = GlobalConsts.HEIGHT - 2; y > 0; y--)
             {
-                for (int x = GlobalConsts.WIDTH - 1; x > 0; x--)
+                //for (int x = GlobalConsts.WIDTH - 1; x > 0; x--)
+                for (int x = 0; x < GlobalConsts.WIDTH - 1; x++)
                 {
                     if (wall[x,y] != null)
                     {
                         int speed = wall[x, y].Speed;
                         int nextVerticalSpot = FindNextAvailableSpot(ref wall, x, y, speed);
-                        if (nextVerticalSpot != y)
+                        if (nextVerticalSpot != -1)
                         {
                             wall[x, y].Accelerate();
                             wall[x, nextVerticalSpot] = wall[x, y];
@@ -237,68 +286,67 @@ namespace FallingSand
                         else
                         {
                             //wall[x, y].Brake();
-                            var leftOrRight = rnd.Next(9);
+                            if (rnd.Next(0, 2) == 0)
+                            {
+                                direction = 0;
+                                preL++;
+                            } else
+                            {
+                                preR++;
+                                direction = 1;
+                            }
+
                             int left = FindNextAvailableSpot(ref wall, x - 1, y, speed);
                             int right = FindNextAvailableSpot(ref wall, x + 1, y, speed);
+                            
 
-                            if (right > y && x < GlobalConsts.WIDTH - 1 && leftOrRight >= 5 && wall[x + 1, right] == null) // go right
+                            if (right != -1 && x < GlobalConsts.WIDTH - 1 && direction == 1 && wall[x + 1, right] == null) // go right
                             {
                                 wall[x + 1, right] = wall[x, y];
                                 wall[x, y] = null;
+                                R++;
                             }
-                            else if (left > y && x > 1 && leftOrRight < 5 && wall[x - 1, left] == null)
+                            else if (left != -1 && x > 1 && direction == 0 && wall[x - 1, left] == null)
                             {
                                 wall[x - 1, left] = wall[x, y];
                                 wall[x, y] = null;
+                                L++;
                             }
                         }
-
-                        /*
-                        if (wall[x, y+1] == null)
-                        {
-                            wall[x, y + 1] = wall[x, y];
-                            wall[x, y] = null;
-                        }
-                        else
-                        {
-                            var leftOrRight = rnd.Next(9);
-                            if (x < GlobalConsts.WIDTH - 1 && leftOrRight >= 5 && wall[x + 1, y + 1] == null) // go right
-                            {
-                                wall[x + 1, y + 1] = wall[x, y];
-                                wall[x, y] = null;
-                            } else if (x > 1 && leftOrRight <5 && wall[x -1, y + 1] == null)
-                            {
-                                wall[x - 1, y + 1] = wall[x, y];
-                                wall[x, y] = null;
-                            }
-
-                        }
-                        */
                     }
                 }
             }
+            debugText.Dispatcher.Invoke(new Action(() =>
+            {
+                debugText.Text = "preL: " + preL.ToString() + "\n";
+                debugText.Text += "preR: " + preR.ToString() + "\n";
+                debugText.Text += "L: " + L.ToString() + "\n";
+                debugText.Text += "R: " + R.ToString() + "\n";
+            }
+));
         }
 
         [STAThread]
         static void GameLoop()
         {
             SandWall wall = new();
-            int colourNow = Utilities.ConvertColorToInt(Colors.White);
+            float colourIndex = 0;
 
             var targetDelta = TimeSpan.FromMilliseconds(16);
             Running = true;
             while (Running)
             {
+                int colourNow = Utilities.ConvertColorToInt(Rainbow(colourIndex));
                 long startFrameTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
 
                 // Handle events
-                mainWindow.Dispatcher.Invoke(new Action(() => {HandleEvents(ref wall, ref colourNow); }));
+                mainWindow.Dispatcher.Invoke(new Action(() => { HandleEvents(ref wall, ref colourNow); }));
 
                 // Physics update
                 PhysicsEngine(ref wall);
 
                 // Scene Render
-                writeableBitmap.Dispatcher.Invoke(new Action(() => {SceneUpdate(ref wall); }));
+                writeableBitmap.Dispatcher.Invoke(new Action(() => { SceneUpdate(ref wall); }));
 
                 long endFrameTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 var frameDelta = TimeSpan.FromMilliseconds(endFrameTime - startFrameTime);
@@ -306,10 +354,11 @@ namespace FallingSand
                 {
                     System.Threading.Thread.Sleep(targetDelta);
                 }
-                colourNow += 255;
-                //if (colourNow > Utilities.ConvertColorToInt(Colors.White)) {
-                //    colourNow = 16;
-               // }
+                //debugText.Dispatcher.Invoke(new Action(() =>
+                //{ debugText.Text += "Col " + colourNow.ToString("X") + "\n"; }
+                //));
+                colourIndex += (float)0.01;
+                if (colourIndex >= 100) colourIndex = 0;
             }
         }
     }
