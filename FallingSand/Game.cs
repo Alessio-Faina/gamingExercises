@@ -302,16 +302,20 @@ namespace FallingSand
         static int preR = 0;
         static int L = 0;
         static int R = 0;
+        static int forDirection = 0;
 
         static void PhysicsEngine(ref SandWall wall)
         {
             Random rnd = new Random();
-            int direction = 0;
+            forDirection = forDirection == 0 ? 1 : 0;
             for (int y = GlobalConsts.HEIGHT - 2; y > 0; y--)
             {
                 //for (int x = GlobalConsts.WIDTH - 1; x > 0; x--)
-                for (int x = 0; x < GlobalConsts.WIDTH - 1; x++)
+                for (int x2 = 0; x2 < GlobalConsts.WIDTH - 1; x2++)
                 {
+                    int x = (forDirection == 0) ? x2 : (GlobalConsts.WIDTH - 1) - x2;
+//                    for (int x = 0; x < GlobalConsts.WIDTH - 1; x++)
+ //               {
                     if (wall[x,y] != null)
                     {
                         int speed = wall[x, y].Speed;
