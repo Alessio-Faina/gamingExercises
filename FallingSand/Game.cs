@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using System.Data.Common;
 using System.Net.NetworkInformation;
 using System.Windows.Media.Media3D;
+using System.Runtime.InteropServices;
 
 
 namespace FallingSand
@@ -22,10 +23,25 @@ namespace FallingSand
 
     public static class Utilities
     {
+        private static readonly byte[] backgroundBitmap = new byte[GlobalConsts.WIDTH * GlobalConsts.HEIGHT * 4];
+
         public static int ConvertColorToInt(Color color)
         {
             uint value = (uint)((color.B << 16) | (color.G << 8) | color.R);
             return (int)value;
+        }
+
+        #region External
+        [DllImport("kernel32.dll", EntryPoint = "RtlMoveMemory")]
+        public static extern void CopyMemory(IntPtr destination, IntPtr source, uint length);
+        #endregion
+
+        public unsafe static void FastClear(ref WriteableBitmap dst)
+        {
+            fixed (byte* b = backgroundBitmap)
+            {
+                CopyMemory(dst.BackBuffer, (IntPtr)b, (uint)backgroundBitmap.Length);
+            }
         }
     }
 
@@ -230,11 +246,13 @@ namespace FallingSand
                 writeableBitmap.Lock();
                 unsafe
                 {
+                    IntPtr pBackBuffer = IntPtr.Zero;
+                    Utilities.FastClear(ref writeableBitmap);
                     for (int y = 0; y < GlobalConsts.HEIGHT; y++)
                     {
                         for (int x = 0; x < GlobalConsts.WIDTH; x++)
                         {
-                            IntPtr pBackBuffer = writeableBitmap.BackBuffer;
+                            pBackBuffer = writeableBitmap.BackBuffer;
                             pBackBuffer += y * writeableBitmap.BackBufferStride;
                             pBackBuffer += x * 4;
 
@@ -242,20 +260,13 @@ namespace FallingSand
                             {
                                 *((int*)pBackBuffer) = wall[x, y].Colour;
                             }
-                            else
-                            {
-                                *((int*)pBackBuffer) = Black;
-                            }
                         }
                     }
                     
                     writeableBitmap.AddDirtyRect(new Int32Rect(0, 0, GlobalConsts.WIDTH, GlobalConsts.HEIGHT));
                 }
             }
-            catch (Exception)
-            {
-
-            }
+            catch (Exception) {}
             finally
             {
                 writeableBitmap.Unlock();
